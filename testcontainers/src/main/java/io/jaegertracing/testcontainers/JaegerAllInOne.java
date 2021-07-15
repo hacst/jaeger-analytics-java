@@ -22,6 +22,7 @@ import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 public class JaegerAllInOne extends GenericContainer<JaegerAllInOne> {
 
   public static final int JAEGER_QUERY_PORT = 16686;
+  public static final int JAEGER_QUERY_GRPC_PORT = 16685;
   public static final int JAEGER_COLLECTOR_THRIFT_PORT = 14268;
   public static final int JAEGER_COLLECTOR_GRPC_PORT = 14250;
   public static final int JAEGER_ADMIN_PORT = 14269;
@@ -35,7 +36,7 @@ public class JaegerAllInOne extends GenericContainer<JaegerAllInOne> {
   protected void init() {
     waitingFor(new BoundPortHttpWaitStrategy(JAEGER_ADMIN_PORT));
     withEnv("COLLECTOR_ZIPKIN_HTTP_PORT", String.valueOf(ZIPKIN_PORT));
-    withExposedPorts(JAEGER_ADMIN_PORT, JAEGER_COLLECTOR_THRIFT_PORT, JAEGER_COLLECTOR_GRPC_PORT, JAEGER_QUERY_PORT,
+    withExposedPorts(JAEGER_ADMIN_PORT, JAEGER_COLLECTOR_THRIFT_PORT, JAEGER_COLLECTOR_GRPC_PORT, JAEGER_QUERY_PORT, JAEGER_QUERY_GRPC_PORT,
         ZIPKIN_PORT);
   }
 
@@ -46,9 +47,13 @@ public class JaegerAllInOne extends GenericContainer<JaegerAllInOne> {
   public int getQueryPort() {
     return getMappedPort(JAEGER_QUERY_PORT);
   }
+  
+  public int getQueryGrpcPort() {
+    return getMappedPort(JAEGER_QUERY_GRPC_PORT);
+  }
 
   public JaegerTracer createTracer(String serviceName) {
-    String endpoint = String.format("http://localhost:%d/api/traces", getCollectorThriftPort());
+    String endpoint = String.format("http://%s:%d/api/traces", getContainerIpAddress(), getCollectorThriftPort());
     Sender sender = new HttpSender.Builder(endpoint)
         .build();
     Reporter reporter = new RemoteReporter.Builder()
@@ -61,7 +66,8 @@ public class JaegerAllInOne extends GenericContainer<JaegerAllInOne> {
   }
 
   public QueryServiceBlockingStub createBlockingQueryService() {
-    ManagedChannel channel = ManagedChannelBuilder.forTarget(String.format("localhost:%d", getQueryPort())).usePlaintext().build();
+    ManagedChannel channel = ManagedChannelBuilder.forTarget(String.format("%s:%d", getContainerIpAddress(), getQueryGrpcPort()))
+      .usePlaintext().build();
     return QueryServiceGrpc.newBlockingStub(channel);
   }
 
